@@ -1,0 +1,81 @@
+#include <Wire.h>
+#include <MPU6050.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+MPU6050 mpu;
+
+// Rotation angles
+float angle = 0;
+
+// Previous points (for clearing)
+int prevX[4], prevY[4];
+
+void setup() {
+  Serial.begin(115200);
+
+  Wire.begin(21, 22);
+  mpu.initialize();
+
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  display.clearDisplay();
+}
+
+// Function to rotate a point
+void rotatePoint(float x, float y, float angle, int &rx, int &ry) {
+  rx = 64 + (x * cos(angle) - y * sin(angle));
+  ry = 32 + (x * sin(angle) + y * cos(angle));
+}
+
+void loop() {
+
+  int16_t ax, ay, az;
+  mpu.getAcceleration(&ax, &ay, &az);
+
+  // Convert tilt to angle
+  float newAngle = atan2(ay, ax);
+
+  // Smooth motion
+  angle = 0.9 * angle + 0.1 * newAngle;
+
+  int x[4], y[4];
+
+  // Square points
+  float size = 20;
+
+  float px[4] = {-size, size, size, -size};
+  float py[4] = {-size, -size, size, size};
+
+  // Erase previous square
+  for (int i = 0; i < 4; i++) {
+    display.drawLine(prevX[i], prevY[i],
+                     prevX[(i+1)%4], prevY[(i+1)%4],
+                     BLACK);
+  }
+
+  // Calculate rotated points
+  for (int i = 0; i < 4; i++) {
+    rotatePoint(px[i], py[i], angle, x[i], y[i]);
+  }
+
+  // Draw new square
+  for (int i = 0; i < 4; i++) {
+    display.drawLine(x[i], y[i],
+                     x[(i+1)%4], y[(i+1)%4],
+                     WHITE);
+  }
+
+  // Save points
+  for (int i = 0; i < 4; i++) {
+    prevX[i] = x[i];
+    prevY[i] = y[i];
+  }
+
+  display.display();
+
+  delay(40);
+}
